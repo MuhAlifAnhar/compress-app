@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+Pillow
+python-multipart
+pydantic
+pydantic-settings
+python-dotenv
+numpy
