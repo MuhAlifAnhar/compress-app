@@ -35,12 +35,26 @@ export default function Home() {
         const formData = new FormData();
         formData.append("file", file);
         
+        // let endpoint = "";
+        // if (file.type.includes("image") || file.name.match(/\.(jpg|jpeg|png)$/i)) {
+        //   endpoint = "http://localhost:8000/compress/image";
+        //   formData.append("quality", "70");
+        // } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        //   endpoint = "http://localhost:8000/compress/pdf";
+        //   formData.append("power", "recommended");
+        // } else {
+        //   continue; // Skip unsupported for now
+        // }
+
         let endpoint = "";
+        // Ambil alamat dari environment variable Vercel, jika tidak ada pakai cadangan Hugging Face
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://muhalifanhar-backend-kompres.hf.space";
+
         if (file.type.includes("image") || file.name.match(/\.(jpg|jpeg|png)$/i)) {
-          endpoint = "http://localhost:8000/compress/image";
+          endpoint = `${baseUrl}/compress/image`;
           formData.append("quality", "70");
         } else if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          endpoint = "http://localhost:8000/compress/pdf";
+          endpoint = `${baseUrl}/compress/pdf`;
           formData.append("power", "recommended");
         } else {
           continue; // Skip unsupported for now
@@ -164,7 +178,9 @@ export default function Home() {
                     </div>
                     
                     <a
-                      href={`http://localhost:8000${res.download_url}`}
+                      // href={`http://localhost:8000${res.download_url}`}
+                      // href={`${process.env.NEXT_PUBLIC_API_URL}${res.download_url}`}
+                      href={`${process.env.NEXT_PUBLIC_API_URL || "https://muhalifanhar-backend-kompres.hf.space"}${res.download_url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-lg flex items-center justify-center gap-2 transition-colors border border-white/10"
