@@ -22,11 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Create storage directories
-RUN mkdir -p storage/uploads storage/processed
+# Create storage directories and set permissions
+RUN mkdir -p storage/uploads storage/processed && chmod -R 777 /app/storage
 
-# Expose the port the app runs on
-EXPOSE 8000
+# Expose the port Hugging Face expects
+EXPOSE 7860
 
-# Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run the application (Ganti port ke 7860)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860"]
