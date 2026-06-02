@@ -2,8 +2,10 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import os
+import uuid
 from services.compress_service import compress_service
 from services.storage_service import storage_service
+from services.transcription_service import transcription_service
 
 app = FastAPI(title="FileCompress & Convert API")
 
@@ -15,6 +17,37 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.post("/transcribe/audio")
+async def transcribe_audio_endpoint(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    content = await file.read()
+    input_path = storage_service.save_upload(content, file.filename)
+    
+    task_id = str(uuid.uuid4())
+    storage_service.create_task(task_id, status="processing", data={"filename": file.filename})
+    
+    # Run the transcription as a background task
+    background_tasks.add_task(transcription_service.process_audio, task_id, input_path)
+    
+    # Schedule cleanup
+    background_tasks.add_task(storage_service.cleanup_old_files)
+    
+    return {
+        "status": "success",
+        "task_id": task_id,
+        "message": "Transcription started in background"
+    }
+
+@app.get("/transcribe/status/{task_id}")
+async def transcription_status(task_id: str):
+    task = storage_service.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    return task
 
 @app.post("/compress/image")
 async def compress_image_endpoint(
@@ -81,5 +114,6 @@ async def download_file(filename: str):
     )
 
 if __name__ == "__main__":
+
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -59,7 +59,7 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected }) => {
           multiple
           onChange={handleFileChange}
           className="absolute inset-0 opacity-0 cursor-pointer"
-          accept=".pdf,.jpg,.jpeg,.png,.docx"
+          accept=".pdf,.jpg,.jpeg,.png,.docx,.mp3,.wav,.m4a,.ogg"
         />
         
         <motion.div
@@ -71,7 +71,8 @@ export const Dropzone: React.FC<DropzoneProps> = ({ onFilesSelected }) => {
         
         <h3 className="text-xl font-semibold mb-2">Drag & Drop Files</h3>
         <p className="text-white/50 text-center">
-          Support PDF, JPG, PNG, and DOCX (Max 10 files)
+          Support PDF, JPG, PNG, DOCX, MP3, WAV, M4A, OGG (Max 10 files)
+
         </p>
       </div>
 
