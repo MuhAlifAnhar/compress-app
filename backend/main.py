@@ -3,11 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import os
 import uuid
+from typing import List
 from services.compress_service import compress_service
 from services.storage_service import storage_service
 from services.transcription_service import transcription_service
+from services.pdf_service import pdf_service
 
 app = FastAPI(title="FileCompress & Convert API")
+
 
 # Enable CORS for frontend
 app.add_middleware(
@@ -95,6 +98,45 @@ async def compress_pdf_endpoint(
         return {
             "status": "success",
             "filename": file.filename,
+            "download_url": f"/download/{os.path.basename(output_path)}",
+            "metrics": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/merge/pdf")
+async def pdf_merge_endpoint(
+    background_tasks: BackgroundTasks,
+    files: List[UploadFile] = File(...)
+):
+    if len(files) < 2:
+        raise HTTPException(status_code=400, detail="Please upload at least 2 PDF files to merge.")
+
+    input_paths = []
+    
+    # Save all uploaded files
+    for file in files:
+        if not file.filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"File {file.filename} is not a PDF.")
+            
+        content = await file.read()
+        saved_path = storage_service.save_upload(content, file.filename)
+        input_paths.append(saved_path)
+    
+    # Generate output path
+    output_filename = "merged_document.pdf"
+    output_path = storage_service.get_processed_path(output_filename)
+    
+    try:
+        # Merge PDFs
+        result = pdf_service.merge_pdfs(input_paths, output_path)
+        
+        # Schedule cleanup
+        background_tasks.add_task(storage_service.cleanup_old_files)
+        
+        return {
+            "status": "success",
+            "filename": output_filename,
             "download_url": f"/download/{os.path.basename(output_path)}",
             "metrics": result
         }

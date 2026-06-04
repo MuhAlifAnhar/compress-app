@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Dropzone } from "@/components/Dropzone";
 import { TranscriptionResult } from "@/components/TranscriptionResult";
 import { motion, AnimatePresence } from "framer-motion";
-import { Zap, Shield, Image as ImageIcon, FileText, Download, Loader2, CheckCircle, AudioLines } from "lucide-react";
+import { Zap, Shield, Image as ImageIcon, Download, Loader2, CheckCircle, AudioLines, Merge } from "lucide-react";
 
 interface ProcessResult {
   filename: string;
@@ -30,10 +30,11 @@ interface TranscriptionTask {
 }
 
 export default function Home() {
-  const [mode, setMode] = useState<"compress" | "transcribe">("compress");
+  const [mode, setMode] = useState<"compress" | "transcribe" | "merge">("compress");
   const [files, setFiles] = useState<File[]>([]);
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<ProcessResult[]>([]);
+  const [mergeResult, setMergeResult] = useState<ProcessResult | null>(null);
   const [transcriptionTasks, setTranscriptionTasks] = useState<TranscriptionTask[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,23 +75,62 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, [transcriptionTasks]);
 
+  // Reset state when mode changes
+  useEffect(() => {
+    setFiles([]);
+    setResults([]);
+    setMergeResult(null);
+    setTranscriptionTasks([]);
+    setError(null);
+    setProcessing(false);
+  }, [mode]);
+
   const handleProcess = async () => {
     if (files.length === 0) return;
     
     setProcessing(true);
     setError(null);
-    
-    if (mode === "compress") {
-      setResults([]);
-    } else {
-      setTranscriptionTasks([]);
-    }
+    setResults([]);
+    setMergeResult(null);
+    setTranscriptionTasks([]);
     
     try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://muhalifanhar-backend-kompres.hf.space";
+
+      // ─── MODE: MERGE PDF (independent) ───
+      if (mode === "merge") {
+        const pdfFiles = files.filter(f => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+
+        if (pdfFiles.length < 2) {
+          setError("Please select at least 2 PDF files to merge.");
+          setProcessing(false);
+          return;
+        }
+
+        const formData = new FormData();
+        for (const file of pdfFiles) {
+          formData.append("files", file);
+        }
+
+        const response = await fetch(`${baseUrl}/merge/pdf`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.detail || `Failed to merge PDFs`);
+        }
+
+        const data = await response.json();
+        setMergeResult(data);
+        setProcessing(false);
+        return;
+      }
+
+      // ─── MODE: COMPRESS or TRANSCRIBE (per-file) ───
       const newResults: ProcessResult[] = [];
       const newTasks: TranscriptionTask[] = [];
-      
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://muhalifanhar-backend-kompres.hf.space";
       
       for (const file of files) {
         const formData = new FormData();
@@ -100,7 +140,7 @@ export default function Home() {
         
         if (mode === "transcribe") {
           if (!file.type.includes("audio") && !file.name.match(/\.(mp3|wav|m4a|ogg)$/i)) {
-             continue; // Skip non-audio files
+             continue;
           }
           endpoint = `${baseUrl}/transcribe/audio`;
         } else {
@@ -111,7 +151,7 @@ export default function Home() {
             endpoint = `${baseUrl}/compress/pdf`;
             formData.append("power", "recommended");
           } else {
-            continue; // Skip unsupported for now
+            continue;
           }
         }
         
@@ -152,6 +192,14 @@ export default function Home() {
     }
   };
 
+  // Dynamic button label & color based on mode
+  const buttonLabel = mode === "compress" ? "Compress Now" : mode === "transcribe" ? "Start Transcription" : "Merge PDFs";
+  const buttonColor = mode === "compress"
+    ? "bg-blue-600 hover:bg-blue-500 hover:shadow-[0_0_30px_rgba(37,99,235,0.4)]"
+    : mode === "transcribe"
+    ? "bg-purple-600 hover:bg-purple-500 hover:shadow-[0_0_30px_rgba(147,51,234,0.4)]"
+    : "bg-emerald-600 hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.4)]";
+
   return (
     <main className="px-6 py-20 max-w-7xl mx-auto">
       {/* Hero Section */}
@@ -180,7 +228,7 @@ export default function Home() {
           transition={{ delay: 0.2 }}
           className="text-xl text-white/60 max-w-2xl mx-auto"
         >
-          Compress your files without losing quality, or transcribe audio into text in minutes. Secure, fast, and completely private.
+          Compress files, transcribe audio, or merge PDFs — all in one place. Secure, fast, and completely private.
         </motion.p>
       </div>
 
@@ -189,22 +237,37 @@ export default function Home() {
          <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
             <button
                onClick={() => setMode("compress")}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all ${mode === "compress" ? "bg-blue-600 text-white shadow-lg" : "text-white/60 hover:text-white"}`}
+               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all ${mode === "compress" ? "bg-blue-600 text-white shadow-lg" : "text-white/60 hover:text-white"}`}
             >
                <ImageIcon className="w-4 h-4" /> Compress
             </button>
             <button
                onClick={() => setMode("transcribe")}
-               className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium transition-all ${mode === "transcribe" ? "bg-purple-600 text-white shadow-lg" : "text-white/60 hover:text-white"}`}
+               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all ${mode === "transcribe" ? "bg-purple-600 text-white shadow-lg" : "text-white/60 hover:text-white"}`}
             >
                <AudioLines className="w-4 h-4" /> Transcribe
+            </button>
+            <button
+               onClick={() => setMode("merge")}
+               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all ${mode === "merge" ? "bg-emerald-600 text-white shadow-lg" : "text-white/60 hover:text-white"}`}
+            >
+               <Merge className="w-4 h-4" /> Merge PDF
             </button>
          </div>
       </div>
 
+      {/* Mode description hint */}
+      <div className="text-center mb-8">
+        <p className="text-sm text-white/40">
+          {mode === "compress" && "Upload images (JPG, PNG) or PDFs to reduce file size."}
+          {mode === "transcribe" && "Upload audio files (MP3, WAV, M4A, OGG) to convert speech to text."}
+          {mode === "merge" && "Upload 2 or more PDF files to combine them into a single document."}
+        </p>
+      </div>
+
       {/* Main Action Area */}
       <div className="space-y-12">
-        <Dropzone onFilesSelected={(newFiles) => setFiles(newFiles)} />
+        <Dropzone onFilesSelected={(newFiles) => setFiles(newFiles)} showReorder={mode === "merge"} />
         
         <div className="flex justify-center">
           <button
@@ -213,9 +276,7 @@ export default function Home() {
             className={`px-8 py-4 rounded-xl font-bold text-lg transition-all duration-300 flex items-center gap-3 ${
               files.length === 0 || processing
                 ? "bg-white/5 text-white/20 cursor-not-allowed"
-                : mode === "compress"
-                ? "bg-blue-600 hover:bg-blue-50 hover:shadow-[0_0_30px_rgba(37,99,235,0.4)] text-white"
-                : "bg-purple-600 hover:bg-purple-500 hover:shadow-[0_0_30px_rgba(147,51,234,0.4)] text-white"
+                : `${buttonColor} text-white`
             }`}
           >
             {processing ? (
@@ -224,13 +285,13 @@ export default function Home() {
                 Processing...
               </>
             ) : (
-              mode === "compress" ? "Compress Now" : "Start Transcription"
+              buttonLabel
             )}
           </button>
         </div>
 
-        {/* Results Section */}
-        {mode === "compress" ? (
+        {/* ─── Results: Compress Mode ─── */}
+        {mode === "compress" && (
            <AnimatePresence>
              {results.length > 0 && (
                <motion.div
@@ -285,7 +346,10 @@ export default function Home() {
                </motion.div>
              )}
            </AnimatePresence>
-        ) : (
+        )}
+
+        {/* ─── Results: Transcribe Mode ─── */}
+        {mode === "transcribe" && (
            <AnimatePresence>
              {transcriptionTasks.length > 0 && (
                <motion.div
@@ -293,7 +357,7 @@ export default function Home() {
                  animate={{ opacity: 1 }}
                  className="flex flex-col gap-6 max-w-4xl mx-auto w-full"
                >
-                 {transcriptionTasks.map((task, i) => (
+                 {transcriptionTasks.map((task) => (
                     task.status === "processing" ? (
                        <motion.div key={task.task_id} className="glass-card p-6 flex items-center gap-4">
                           <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
@@ -322,6 +386,38 @@ export default function Home() {
            </AnimatePresence>
         )}
 
+        {/* ─── Results: Merge PDF Mode ─── */}
+        {mode === "merge" && mergeResult && (
+           <AnimatePresence>
+             <motion.div
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               className="max-w-lg mx-auto"
+             >
+               <div className="glass-card p-8 flex flex-col items-center text-center">
+                 <div className="p-4 rounded-full bg-emerald-500/10 text-emerald-400 mb-6">
+                   <CheckCircle className="w-10 h-10" />
+                 </div>
+                 <h3 className="text-2xl font-bold mb-2">PDFs Merged Successfully!</h3>
+                 <p className="text-white/50 mb-2">{mergeResult.filename}</p>
+                 <p className="text-xs text-white/40 mb-6">
+                   Total input: {(mergeResult.metrics.original_size / 1024 / 1024).toFixed(2)} MB → 
+                   Output: {(mergeResult.metrics.compressed_size / 1024 / 1024).toFixed(2)} MB
+                 </p>
+                 <a
+                   href={`${process.env.NEXT_PUBLIC_API_URL || "https://muhalifanhar-backend-kompres.hf.space"}${mergeResult.download_url}`}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-lg flex items-center justify-center gap-2 transition-colors text-white font-medium"
+                 >
+                   <Download className="w-5 h-5" />
+                   Download Merged PDF
+                 </a>
+               </div>
+             </motion.div>
+           </AnimatePresence>
+        )}
+
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center gap-3 max-w-2xl mx-auto mt-4">
             <Shield className="w-5 h-5 flex-shrink-0" />
@@ -331,7 +427,7 @@ export default function Home() {
       </div>
 
       {/* Features Grid */}
-      <div className="mt-32 grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="mt-32 grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="glass-card p-8">
           <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center mb-6 text-blue-400">
             <ImageIcon className="w-6 h-6" />
@@ -348,6 +444,15 @@ export default function Home() {
           <h3 className="text-xl font-bold mb-4">AI Transcription</h3>
           <p className="text-white/50">
             Accurate speech-to-text conversion supporting long audio files and multiple languages.
+          </p>
+        </div>
+        <div className="glass-card p-8">
+          <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mb-6 text-emerald-400">
+            <Merge className="w-6 h-6" />
+          </div>
+          <h3 className="text-xl font-bold mb-4">PDF Merger</h3>
+          <p className="text-white/50">
+            Combine multiple PDF files into a single document instantly — no compression applied.
           </p>
         </div>
         <div className="glass-card p-8">
