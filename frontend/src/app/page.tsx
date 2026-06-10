@@ -267,7 +267,7 @@ export default function Home() {
 
       {/* Main Action Area */}
       <div className="space-y-12">
-        <Dropzone onFilesSelected={(newFiles) => setFiles(newFiles)} showReorder={mode === "merge"} />
+        <Dropzone key={mode} onFilesSelected={(newFiles) => setFiles(newFiles)} showReorder={mode === "merge"} />
         
         <div className="flex justify-center">
           <button
